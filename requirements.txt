@@ -1,0 +1,7 @@
+# Add your backend dependencies here
+fastapi
+uvicorn
+pydantic
+python-dotenv
+requests
+sqlalchemy
