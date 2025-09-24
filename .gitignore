@@ -1,3 +1,5 @@
+# Ignore SQLite database
+videogen.db
 # Logs
 logs
 *.log
