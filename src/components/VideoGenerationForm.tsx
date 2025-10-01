@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Play, Download, Share2, Loader, AlertCircle } from 'lucide-react';
 import { VideoGenerationParams, GeneratedVideo } from '../types';
 import { videoGenerationAPI } from '../api/videoGeneration';
@@ -31,6 +31,8 @@ export const VideoGenerationForm: React.FC = () => {
 
   const allowedDurations = [5, 10];
 
+  const wsRef = useRef<WebSocket | null>(null);
+
   const handleGenerate = async () => {
     if (!params.prompt.trim()) {
       setError('Please enter a video description');
@@ -44,21 +46,60 @@ export const VideoGenerationForm: React.FC = () => {
     try {
       const response = await videoGenerationAPI.generateVideo(params);
       if (response.success && response.data) {
-  let polling = true;
-  let pollCount = 0;
-  const maxPolls = 150; // ~5 minutes
-  const pollInterval = 5000;
         const jobId = response.data.jobId;
-
         // Progress bar simulation
         const interval = setInterval(() => {
           setProgress((prev) => {
             if (prev >= 95) return 95;
             return prev + Math.random() * 2;
           });
-        }, pollInterval);
+        }, 500);
 
-        // Poll backend until job is completed and videoUrl is present
+        // WebSocket logic commented out; using status polling only
+        // const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws/job/${jobId}`;
+        // wsRef.current = new WebSocket(wsUrl);
+        // wsRef.current.onmessage = (event) => {
+        //   const data = JSON.parse(event.data);
+        //   if (data.videoUrl) {
+        //     setGeneratedVideo(data);
+        //     setProgress(100);
+        //     clearInterval(interval);
+        //     setIsGenerating(false);
+        //     wsRef.current?.close();
+        //   }
+        // };
+        // wsRef.current.onerror = () => {
+        //   // Fallback to polling if websocket fails
+        //   let polling = true;
+        //   let pollCount = 0;
+        //   const maxPolls = 150;
+        //   const pollInterval = 1000;
+        //   const pollStatus = async () => {
+        //     if (!polling || pollCount >= maxPolls) {
+        //       clearInterval(interval);
+        //       setIsGenerating(false);
+        //       setError('Video generation timed out. Please try again.');
+        //       return;
+        //     }
+        //     pollCount++;
+        //     const statusResponse = await videoGenerationAPI.checkStatus(jobId);
+        //     if (statusResponse.success && statusResponse.data && statusResponse.data.videoUrl) {
+        //       setGeneratedVideo(statusResponse.data);
+        //       setProgress(100);
+        //       clearInterval(interval);
+        //       setIsGenerating(false);
+        //       polling = false;
+        //       return;
+        //     }
+        //     setTimeout(pollStatus, pollInterval);
+        //   };
+        //   pollStatus();
+        // };
+        // Use polling directly
+        let polling = true;
+        let pollCount = 0;
+        const maxPolls = 150;
+        const pollInterval = 100;
         const pollStatus = async () => {
           if (!polling || pollCount >= maxPolls) {
             clearInterval(interval);
@@ -68,15 +109,13 @@ export const VideoGenerationForm: React.FC = () => {
           }
           pollCount++;
           const statusResponse = await videoGenerationAPI.checkStatus(jobId);
-          if (statusResponse.success && statusResponse.data) {
-            if ((statusResponse.data.status === 'completed' || statusResponse.data.status === 'succeeded') && statusResponse.data.videoUrl) {
-              setGeneratedVideo(statusResponse.data);
-              setProgress(100);
-              clearInterval(interval);
-              setIsGenerating(false);
-              polling = false;
-              return;
-            }
+          if (statusResponse.success && statusResponse.data && statusResponse.data.videoUrl) {
+            setGeneratedVideo(statusResponse.data);
+            setProgress(100);
+            clearInterval(interval);
+            setIsGenerating(false);
+            polling = false;
+            return;
           }
           setTimeout(pollStatus, pollInterval);
         };
@@ -116,6 +155,19 @@ export const VideoGenerationForm: React.FC = () => {
 
   return (
     <div className="flex-1 p-6 space-y-6">
+      {/* Loader/Progress Bar */}
+      {isGenerating && (
+        <div className="flex flex-col items-center justify-center mb-4">
+          <Loader className="animate-spin text-cyan-500 mb-2" size={32} />
+          <div className="w-full bg-gray-800 rounded-full h-2.5 dark:bg-gray-700">
+            <div
+              className="bg-cyan-500 h-2.5 rounded-full"
+              style={{ width: `${progress}%`, transition: 'width 0.3s' }}
+            ></div>
+          </div>
+          <span className="text-xs text-gray-400 mt-2">Generating video... ({Math.round(progress)}%)</span>
+        </div>
+      )}
       {/* Main Generation Panel */}
       <div className="bg-white/5 backdrop-blur-xl rounded-2xl border border-white/10 p-6">
         <h2 className="text-2xl font-bold text-white mb-6">Text to Video AI</h2>
